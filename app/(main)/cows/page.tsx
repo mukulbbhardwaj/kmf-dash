@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
 import { HerdList } from "@/components/HerdList";
 import { PlusIcon } from "@/components/icons";
 import { Loading } from "@/components/ui";
-import { listCows } from "@/lib/data";
-import { ageLabel, todayISO } from "@/lib/dates";
+import { loadHerd } from "@/lib/loaders";
 
 export const metadata: Metadata = { title: "Herd" };
 
@@ -20,9 +18,7 @@ export default function HerdPage({ searchParams }: PageProps<"/cows">) {
 
 async function Herd({ searchParams }: Pick<PageProps<"/cows">, "searchParams">) {
   const { q, filter } = await searchParams;
-  await requireUser();
-  const today = todayISO();
-  const cows = (await listCows(today)).map((c) => ({ ...c, age: ageLabel(c.birthDate, today) }));
+  const cows = await loadHerd();
 
   return (
     <div className="flex flex-col gap-3.5 px-5 pt-[max(env(safe-area-inset-top),24px)]">

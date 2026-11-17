@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS health_checks (
   note        TEXT,
   created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS health_checks_cow ON health_checks(cow_id, date);
+CREATE INDEX IF NOT EXISTS health_checks_cow ON health_checks(cow_id, date, time, id);
 
 CREATE TABLE IF NOT EXISTS treatments (
   id              INTEGER PRIMARY KEY,
@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS treatments (
   created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS treatments_cow ON treatments(cow_id, start_date);
+CREATE INDEX IF NOT EXISTS treatments_start ON treatments(start_date);
 
 CREATE TABLE IF NOT EXISTS feed_logs (
   id          INTEGER PRIMARY KEY,
@@ -51,6 +52,8 @@ CREATE TABLE IF NOT EXISTS feed_logs (
   created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS feed_logs_date ON feed_logs(date);
+CREATE INDEX IF NOT EXISTS feed_logs_group ON feed_logs(group_name COLLATE NOCASE, session);
+CREATE INDEX IF NOT EXISTS feed_logs_cow ON feed_logs(cow_id);
 
 CREATE TABLE IF NOT EXISTS users (
   id            INTEGER PRIMARY KEY,

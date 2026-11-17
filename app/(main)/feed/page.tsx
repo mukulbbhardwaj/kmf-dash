@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
 import { DeleteRecordButton } from "@/components/DeleteButton";
 import { PlusIcon } from "@/components/icons";
 import { Card, Empty, Loading, SectionTitle } from "@/components/ui";
-import { type FeedLog, listFeedLogs, listGroups } from "@/lib/data";
-import { addDays, fmtRelative, todayISO } from "@/lib/dates";
+import type { FeedLog } from "@/lib/data";
+import { fmtRelative } from "@/lib/dates";
+import { loadFeed } from "@/lib/loaders";
 
 export const metadata: Metadata = { title: "Feed" };
 
@@ -27,10 +27,7 @@ export default function FeedPage() {
 }
 
 async function FeedLists() {
-  await requireUser();
-  const today = todayISO();
-  const logs = await listFeedLogs(addDays(today, -13), today);
-  const groups = await listGroups();
+  const { today, logs, groups } = await loadFeed();
   const todays = logs.filter((l) => l.date === today);
 
   const byDay = new Map<string, FeedLog[]>();

@@ -180,6 +180,59 @@ export async function listCows(today: string): Promise<CowSummary[]> {
   });
 }
 
+export type CowProfile = {
+  cow: CowSummary;
+  health: HealthCheck[];
+  treatments: Treatment[];
+  feeds: FeedLog[];
+};
+
+/** Everything the cow page needs, fetched in one parallel round trip keyed by tag. */
+export async function getCowProfile(tag: string, today: string, withFeed: boolean): Promise<CowProfile | null> {
+  const [cowRow, healthRows, treatmentRows, feedRows] = await Promise.all([
+    get("SELECT * FROM cows WHERE tag = ? COLLATE NOCASE", [tag]),
+    all(
+      `SELECT h.* FROM health_checks h JOIN cows c ON c.id = h.cow_id
+       WHERE c.tag = ? COLLATE NOCASE ORDER BY h.date DESC, h.time DESC, h.id DESC LIMIT 50`,
+      [tag],
+    ),
+    all(
+      `SELECT t.* FROM treatments t JOIN cows c ON c.id = t.cow_id
+       WHERE c.tag = ? COLLATE NOCASE ORDER BY t.start_date DESC, t.id DESC LIMIT 50`,
+      [tag],
+    ),
+    withFeed
+      ? all(
+          `SELECT f.*, fc.tag AS cow_tag FROM cows c
+           JOIN feed_logs f ON f.cow_id = c.id OR (f.group_name IS NOT NULL AND f.group_name = c.group_name COLLATE NOCASE)
+           LEFT JOIN cows fc ON fc.id = f.cow_id
+           WHERE c.tag = ? COLLATE NOCASE ORDER BY f.date DESC, f.session DESC, f.id DESC LIMIT 30`,
+          [tag],
+        )
+      : Promise.resolve([]),
+  ]);
+  if (!cowRow) return null;
+
+  const cow = toCow(cowRow);
+  const health = healthRows.map(toHealth);
+  const treatments = treatmentRows.map(toTreatment);
+  const latest = health[0];
+  const holds = treatments.filter((t) => isMilkHold(t, today)).map((t) => t.milkSafeFrom).sort();
+  return {
+    cow: {
+      ...cow,
+      condition: latest?.condition ?? null,
+      temperature: latest?.temperature ?? null,
+      lastCheck: latest?.date ?? null,
+      onTreatment: treatments.some((t) => isActiveTreatment(t, today)),
+      milkSafeFrom: holds.at(-1) ?? null,
+    },
+    health,
+    treatments,
+    feeds: feedRows.map(toFeed),
+  };
+}
+
 export async function getCowByTag(tag: string): Promise<Cow | null> {
   const r = await get("SELECT * FROM cows WHERE tag = ? COLLATE NOCASE", [tag]);
   return r ? toCow(r) : null;
@@ -237,11 +290,6 @@ export async function deleteCow(id: number) {
 
 // ---------- Health ----------
 
-export async function listHealthChecks(cowId: number, limit = 50): Promise<HealthCheck[]> {
-  const rows = await all("SELECT * FROM health_checks WHERE cow_id = ? ORDER BY date DESC, time DESC, id DESC LIMIT ?", [cowId, limit]);
-  return rows.map(toHealth);
-}
-
 export async function insertHealthCheck(h: Omit<HealthCheck, "id">) {
   await run("INSERT INTO health_checks (cow_id, date, time, condition, temperature, symptoms, note) VALUES (?, ?, ?, ?, ?, ?, ?)", [
     h.cowId,
@@ -264,11 +312,6 @@ const TREATMENT_WITH_COW = `SELECT t.*, c.tag AS cow_tag, c.name AS cow_name FRO
 
 function toTreatmentWithCow(r: Row): TreatmentWithCow {
   return { ...toTreatment(r), cowTag: String(r.cow_tag), cowName: str(r.cow_name) };
-}
-
-export async function listTreatments(cowId: number, limit = 50): Promise<Treatment[]> {
-  const rows = await all("SELECT * FROM treatments WHERE cow_id = ? ORDER BY start_date DESC, id DESC LIMIT ?", [cowId, limit]);
-  return rows.map(toTreatment);
 }
 
 /** Treatments still running or still holding milk on `today`. */
@@ -326,15 +369,6 @@ const FEED_WITH_COW = `SELECT f.*, c.tag AS cow_tag FROM feed_logs f LEFT JOIN c
 
 export async function listFeedLogs(fromDate: string, toDate: string): Promise<FeedLog[]> {
   const rows = await all(`${FEED_WITH_COW} WHERE f.date BETWEEN ? AND ? ORDER BY f.date DESC, f.session DESC, f.id DESC`, [fromDate, toDate]);
-  return rows.map(toFeed);
-}
-
-export async function listFeedLogsForCow(cow: Cow, limit = 30): Promise<FeedLog[]> {
-  const rows = await all(
-    `${FEED_WITH_COW} WHERE f.cow_id = ? OR (f.group_name IS NOT NULL AND f.group_name = ? COLLATE NOCASE)
-     ORDER BY f.date DESC, f.session DESC, f.id DESC LIMIT ?`,
-    [cow.id, cow.groupName ?? "", limit],
-  );
   return rows.map(toFeed);
 }
 

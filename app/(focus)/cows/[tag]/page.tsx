@@ -1,22 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
 import { DeleteRecordButton } from "@/components/DeleteButton";
 import { PlusIcon } from "@/components/icons";
 import { CONDITION_LABEL, Empty, Loading, MilkHoldBanner, PageHeader, TagBadge } from "@/components/ui";
-import {
-  type Condition,
-  getCowByTag,
-  isActiveTreatment,
-  isMilkHold,
-  listCows,
-  listFeedLogsForCow,
-  listHealthChecks,
-  listTreatments,
-  treatmentDay,
-} from "@/lib/data";
-import { ageLabel, fmtDay, fmtRelative, todayISO } from "@/lib/dates";
+import { type Condition, isActiveTreatment, isMilkHold, treatmentDay } from "@/lib/data";
+import { ageLabel, fmtDay, fmtRelative } from "@/lib/dates";
+import { loadCow } from "@/lib/loaders";
 
 export async function generateMetadata({ params }: PageProps<"/cows/[tag]">) {
   const { tag } = await params;
@@ -42,20 +32,15 @@ const DOT: Record<Condition, string> = { healthy: "#1d6b45", watch: "#d97706", s
 async function CowProfile({ params, searchParams }: PageProps<"/cows/[tag]">) {
   const { tag: rawTag } = await params;
   const { tab: rawTab } = await searchParams;
-  await requireUser();
-
-  const cow = await getCowByTag(decodeURIComponent(rawTag));
-  if (!cow) notFound();
-
-  const today = todayISO();
-  const summary = (await listCows(today)).find((c) => c.id === cow.id)!;
   const tab = TABS.some((t) => t.key === rawTab) ? (rawTab as (typeof TABS)[number]["key"]) : "health";
+
+  const { today, profile } = await loadCow(decodeURIComponent(rawTag), tab);
+  if (!profile) notFound();
+  const { cow, health, treatments, feeds } = profile;
+  const summary = cow;
   const base = `/cows/${encodeURIComponent(cow.tag)}`;
   const q = `?tag=${encodeURIComponent(cow.tag)}`;
 
-  const health = tab === "health" ? await listHealthChecks(cow.id) : [];
-  const treatments = tab === "medicine" ? await listTreatments(cow.id) : [];
-  const feeds = tab === "feed" ? await listFeedLogsForCow(cow) : [];
   const age = ageLabel(cow.birthDate, today);
   const stageLabel = { milking: "Milking", dry: "Dry", heifer: "Heifer", calf: "Calf" }[cow.stage];
 

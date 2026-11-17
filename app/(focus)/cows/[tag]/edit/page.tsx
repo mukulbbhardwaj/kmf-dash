@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
 import { removeCow } from "@/app/actions";
 import { CowForm } from "@/components/CowForm";
 import { Loading, PageHeader } from "@/components/ui";
-import { getCowByTag, listBreeds, listGroups } from "@/lib/data";
+import { loadCowForEdit } from "@/lib/loaders";
 
 export default function EditCowPage(props: PageProps<"/cows/[tag]/edit">) {
   return (
@@ -16,14 +15,13 @@ export default function EditCowPage(props: PageProps<"/cows/[tag]/edit">) {
 
 async function EditCow({ params }: PageProps<"/cows/[tag]/edit">) {
   const { tag } = await params;
-  const user = await requireUser();
-  const cow = await getCowByTag(decodeURIComponent(tag));
+  const { user, cow, groups, breeds } = await loadCowForEdit(decodeURIComponent(tag));
   if (!cow) notFound();
 
   return (
     <>
       <PageHeader title={`Edit ${cow.tag}`} close={`/cows/${encodeURIComponent(cow.tag)}`} />
-      <CowForm cow={cow} groups={(await listGroups()).map((g) => g.name)} breeds={await listBreeds()} />
+      <CowForm cow={cow} groups={groups} breeds={breeds} />
       {user.role === "admin" && (
         <form action={removeCow} className="px-5 pb-10">
           <input type="hidden" name="id" value={cow.id} />

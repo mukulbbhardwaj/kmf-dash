@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
 import { FeedIcon, HeartIcon, PillIcon, PlusIcon, ChevronRightIcon, UserIcon } from "@/components/icons";
 import { QuickFind } from "@/components/QuickFind";
 import { Card, Empty, Loading, SectionTitle } from "@/components/ui";
-import { listCows, listCurrentTreatments, listFeedLogs, listGroups, isActiveTreatment, treatmentDay } from "@/lib/data";
-import { fmtDay, fmtLongDay, todayISO } from "@/lib/dates";
+import { isActiveTreatment, treatmentDay } from "@/lib/data";
+import { fmtDay, fmtLongDay } from "@/lib/dates";
+import { loadHome } from "@/lib/loaders";
 
 export default function HomePage() {
   return (
@@ -18,18 +18,10 @@ export default function HomePage() {
 type Task = { key: string; href: string; badge: string; tone: string; title: string; detail: string };
 
 async function Home() {
-  const user = await requireUser();
-  const today = todayISO();
-  const [cows, treatments, fedToday, groups] = await Promise.all([
-    listCows(today),
-    listCurrentTreatments(today),
-    listFeedLogs(today, today),
-    listGroups(),
-  ]);
+  const { user, today, hour, cows, treatments, fedToday, groups } = await loadHome();
 
   const sick = cows.filter((c) => c.condition === "sick").length;
   const onHold = cows.filter((c) => c.milkSafeFrom).length;
-  const hour = new Date().getHours();
 
   const tasks: Task[] = [
     ...treatments
@@ -103,15 +95,15 @@ async function Home() {
       <section className="flex flex-col gap-2.5">
         <SectionTitle>Quick add</SectionTitle>
         <div className="grid grid-cols-3 gap-2.5">
-          <Link href="/health/new" className="flex h-23 flex-col justify-between rounded-2xl bg-brand p-3.5 text-white">
+          <Link href="/health/new" prefetch={true} className="flex h-23 flex-col justify-between rounded-2xl bg-brand p-3.5 text-white">
             <HeartIcon size={24} />
             <span className="text-sm font-semibold">Health</span>
           </Link>
-          <Link href="/medicine/new" className="flex h-23 flex-col justify-between rounded-2xl border border-line bg-surface p-3.5">
+          <Link href="/medicine/new" prefetch={true} className="flex h-23 flex-col justify-between rounded-2xl border border-line bg-surface p-3.5">
             <PillIcon size={24} className="text-brand" />
             <span className="text-sm font-semibold">Medicine</span>
           </Link>
-          <Link href="/feed/new" className="flex h-23 flex-col justify-between rounded-2xl border border-line bg-surface p-3.5">
+          <Link href="/feed/new" prefetch={true} className="flex h-23 flex-col justify-between rounded-2xl border border-line bg-surface p-3.5">
             <FeedIcon size={24} className="text-brand" />
             <span className="text-sm font-semibold">Feed</span>
           </Link>

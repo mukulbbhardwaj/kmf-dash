@@ -57,6 +57,7 @@ export function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
+              prefetch={true}
               aria-current={isActive(pathname, tab.href) ? "page" : undefined}
               className={`flex flex-col items-center gap-1 py-1 text-[11px] ${
                 isActive(pathname, tab.href) ? "font-bold text-brand" : "font-semibold text-muted"

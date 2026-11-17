@@ -17,19 +17,28 @@ function client() {
   return globalForDb.farmDb;
 }
 
-/** The connection, with the schema applied once per server instance. */
+// Bump when lib/schema.sql or migrate() changes, so existing databases get upgraded.
+const SCHEMA_VERSION = 3;
+
+/** The connection, with the schema checked once per server instance. */
 export async function db() {
   const c = client();
-  globalForDb.farmDbReady ??= (async () => {
-    if (URL.startsWith("file:")) await c.execute("PRAGMA journal_mode = WAL");
-    await c.executeMultiple(fs.readFileSync(SCHEMA_PATH, "utf8"));
-    await migrate(c);
-  })().catch((err) => {
+  globalForDb.farmDbReady ??= ensureSchema(c).catch((err) => {
     globalForDb.farmDbReady = undefined;
     throw err;
   });
   await globalForDb.farmDbReady;
   return c;
+}
+
+// One cheap query when the database is current; the full schema only when it isn't.
+async function ensureSchema(c: Client) {
+  if (URL.startsWith("file:")) await c.execute("PRAGMA journal_mode = WAL");
+  const version = Number((await c.execute("PRAGMA user_version")).rows[0]?.user_version ?? 0);
+  if (version >= SCHEMA_VERSION) return;
+  await c.executeMultiple(fs.readFileSync(SCHEMA_PATH, "utf8"));
+  await migrate(c);
+  await c.execute(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
 
 // Small in-place upgrades for databases created by earlier versions.

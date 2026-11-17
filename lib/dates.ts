@@ -1,16 +1,34 @@
-// Dates are stored as local-calendar "YYYY-MM-DD" strings. Arithmetic is done in
-// UTC so a date never shifts across a timezone boundary.
+// Dates are stored as "YYYY-MM-DD" strings in the farm's own calendar. Arithmetic is
+// done in UTC so a date never shifts across a timezone boundary.
 
-function pad(n: number) {
-  return String(n).padStart(2, "0");
+// Servers (e.g. Vercel) run in UTC, so "today" must come from the farm's timezone.
+export const FARM_TIMEZONE = process.env.NEXT_PUBLIC_FARM_TIMEZONE ?? "Asia/Kolkata";
+
+const farmClock = new Intl.DateTimeFormat("en-CA", {
+  timeZone: FARM_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+function farmNow(now: Date) {
+  const p = Object.fromEntries(farmClock.formatToParts(now).map((x) => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour), time: `${p.hour}:${p.minute}` };
 }
 
 export function todayISO(now = new Date()) {
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return farmNow(now).date;
 }
 
 export function nowTime(now = new Date()) {
-  return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return farmNow(now).time;
+}
+
+export function currentHour(now = new Date()) {
+  return farmNow(now).hour;
 }
 
 function toUTC(iso: string) {

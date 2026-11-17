@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
 import { PlusIcon } from "@/components/icons";
 import { Card, Empty, Loading, Pill, SectionTitle } from "@/components/ui";
-import { type TreatmentWithCow, isActiveTreatment, isMilkHold, listCurrentTreatments, listRecentTreatments, treatmentDay } from "@/lib/data";
-import { fmtDay, fmtRelative, todayISO } from "@/lib/dates";
+import { type TreatmentWithCow, isActiveTreatment, isMilkHold, treatmentDay } from "@/lib/data";
+import { fmtDay, fmtRelative } from "@/lib/dates";
+import { loadMedicine } from "@/lib/loaders";
 
 export const metadata: Metadata = { title: "Medicine" };
 
@@ -26,13 +26,11 @@ export default function MedicinePage() {
 }
 
 async function MedicineLists() {
-  await requireUser();
-  const today = todayISO();
-  const current = await listCurrentTreatments(today);
+  const { today, current, recent } = await loadMedicine();
   const active = current.filter((t) => isActiveTreatment(t, today));
   const holdOnly = current.filter((t) => !isActiveTreatment(t, today));
   const currentIds = new Set(current.map((t) => t.id));
-  const past = (await listRecentTreatments(40)).filter((t) => !currentIds.has(t.id));
+  const past = recent.filter((t) => !currentIds.has(t.id));
 
   return (
     <>

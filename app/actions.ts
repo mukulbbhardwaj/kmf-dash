@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   type Condition,
@@ -22,6 +22,7 @@ import {
 } from "@/lib/data";
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { todayISO } from "@/lib/dates";
+import { FARM_DATA_TAG } from "@/lib/loaders";
 
 export type FormState = { error?: string; ok?: string };
 
@@ -49,6 +50,8 @@ function date(fd: FormData, key: string) {
 }
 
 function done(path: string): never {
+  // Drop cached page data (lib/loaders.ts) so the next screen shows this change.
+  updateTag(FARM_DATA_TAG);
   revalidatePath("/", "layout");
   redirect(path);
 }

@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
 import { FeedForm } from "@/components/FeedForm";
 import { Loading, PageHeader } from "@/components/ui";
-import { listCows, listGroups, listLastFeedItems } from "@/lib/data";
-import { todayISO } from "@/lib/dates";
-import { cowOptions } from "@/lib/options";
+import { loadFormOptions } from "@/lib/loaders";
 
 export const metadata: Metadata = { title: "Log feed" };
 
@@ -22,10 +19,7 @@ export default function NewFeedPage({ searchParams }: PageProps<"/feed/new">) {
 
 async function NewFeed({ searchParams }: Pick<PageProps<"/feed/new">, "searchParams">) {
   const { target, session } = await searchParams;
-  await requireUser();
-  const today = todayISO();
-  const cows = cowOptions(await listCows(today));
-  const groups = await listGroups();
+  const { today, hour, cows, groups, lastFeedItems } = await loadFormOptions();
 
   const validTarget =
     typeof target === "string" &&
@@ -38,9 +32,9 @@ async function NewFeed({ searchParams }: Pick<PageProps<"/feed/new">, "searchPar
     <FeedForm
       groups={groups}
       cows={cows}
-      lastItems={await listLastFeedItems()}
+      lastItems={lastFeedItems}
       initialTarget={validTarget}
-      initialSession={session === "morning" || session === "evening" ? session : new Date().getHours() < 12 ? "morning" : "evening"}
+      initialSession={session === "morning" || session === "evening" ? session : hour < 12 ? "morning" : "evening"}
       today={today}
     />
   );

@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
 import { MedicineForm } from "@/components/MedicineForm";
 import { Loading, PageHeader } from "@/components/ui";
-import { listCows, listMedicinePresets, listRecentMedicines } from "@/lib/data";
-import { todayISO } from "@/lib/dates";
-import { cowOptions, findTagged } from "@/lib/options";
+import { loadFormOptions } from "@/lib/loaders";
+import { findTagged } from "@/lib/options";
 
 export const metadata: Metadata = { title: "Give medicine" };
 
@@ -19,9 +17,7 @@ export default function NewMedicinePage({ searchParams }: PageProps<"/medicine/n
 
 async function NewMedicine({ searchParams }: Pick<PageProps<"/medicine/new">, "searchParams">) {
   const { tag } = await searchParams;
-  await requireUser();
-  const today = todayISO();
-  const cows = cowOptions(await listCows(today));
+  const { today, cows, recentMedicines, presets } = await loadFormOptions();
   const initial = findTagged(cows, tag);
 
   return (
@@ -30,8 +26,8 @@ async function NewMedicine({ searchParams }: Pick<PageProps<"/medicine/new">, "s
       <MedicineForm
         cows={cows}
         initialCowIds={initial ? [initial.id] : []}
-        recent={await listRecentMedicines()}
-        presets={await listMedicinePresets()}
+        recent={recentMedicines}
+        presets={presets}
         today={today}
       />
     </>
