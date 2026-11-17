@@ -18,6 +18,7 @@ import {
   insertHealthCheck,
   insertTreatments,
   listCows,
+  saveMilkSession,
   updateCow,
 } from "@/lib/data";
 import { requireAdmin, requireUser } from "@/lib/auth";
@@ -189,6 +190,31 @@ export async function saveFeedLog(_: FormState, fd: FormData): Promise<FormState
 
   await insertFeedLog({ date: date(fd, "date"), session, groupName, cowId, headCount, items, note: text(fd, "note") });
   done("/feed");
+}
+
+// ---------- Milk ----------
+
+export async function saveMilk(_: FormState, fd: FormData): Promise<FormState> {
+  await requireUser();
+  const session = text(fd, "session") as Session;
+  if (!SESSIONS.includes(session)) return { error: "Choose Morning or Evening." };
+  const day = date(fd, "date");
+  if (day > todayISO()) return { error: "That date is in the future." };
+
+  let entries: { cowId: number; litres: number | null }[];
+  try {
+    entries = (JSON.parse(text(fd, "entries") ?? "[]") as { cowId: unknown; litres: unknown }[]).map((e) => ({
+      cowId: Number(e.cowId),
+      litres: e.litres == null || e.litres === "" ? null : Math.round(Number(e.litres) * 100) / 100,
+    }));
+  } catch {
+    return { error: "Could not read the milk amounts." };
+  }
+  const bad = entries.find((e) => !Number.isInteger(e.cowId) || (e.litres != null && !(e.litres >= 0 && e.litres <= 80)));
+  if (bad) return { error: "Litres must be between 0 and 80 for each cow." };
+
+  await saveMilkSession(day, session, entries);
+  done("/milk");
 }
 
 // ---------- Deleting records ----------

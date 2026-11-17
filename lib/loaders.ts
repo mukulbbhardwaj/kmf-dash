@@ -2,13 +2,17 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { requireUser } from "./auth";
 import {
+  type Session,
   getCowByTag,
   getCowProfile,
+  getLastMilkBefore,
+  getMilkSession,
   listBreeds,
   listCows,
   listCurrentTreatments,
   listFeedLogs,
   listGroups,
+  listHerdMilk,
   listLastFeedItems,
   listMedicinePresets,
   listRecentMedicines,
@@ -37,14 +41,17 @@ export async function loadHome() {
   "use cache: private";
   cacheForThisBrowser();
   const today = todayISO();
-  const [user, cows, treatments, fedToday, groups] = await Promise.all([
+  const [user, cows, treatments, fedToday, groups, milk] = await Promise.all([
     requireUser(),
     listCows(today),
     listCurrentTreatments(today),
     listFeedLogs(today, today),
     listGroups(),
+    listHerdMilk(addDays(today, -1), today),
   ]);
-  return { user, today, hour: currentHour(), cows, treatments, fedToday, groups };
+  const milkToday = milk.find((d) => d.date === today) ?? null;
+  const milkYesterday = milk.find((d) => d.date === addDays(today, -1)) ?? null;
+  return { user, today, hour: currentHour(), cows, treatments, fedToday, groups, milkToday, milkYesterday };
 }
 
 export async function loadHerd() {
@@ -55,11 +62,11 @@ export async function loadHerd() {
   return cows.map((c) => ({ ...c, age: ageLabel(c.birthDate, today) }));
 }
 
-export async function loadCow(tag: string, tab: "health" | "medicine" | "feed") {
+export async function loadCow(tag: string, tab: "health" | "medicine" | "feed" | "milk") {
   "use cache: private";
   cacheForThisBrowser();
   const today = todayISO();
-  const [user, profile] = await Promise.all([requireUser(), getCowProfile(tag, today, tab === "feed")]);
+  const [user, profile] = await Promise.all([requireUser(), getCowProfile(tag, today, tab)]);
   return { user, today, profile };
 }
 
@@ -101,4 +108,42 @@ export async function loadFormOptions() {
     listLastFeedItems(),
   ]);
   return { today, now: nowTime(), hour: currentHour(), cows: cowOptions(cows), groups, breeds, recentMedicines, presets, lastFeedItems };
+}
+
+export async function loadMilk() {
+  "use cache: private";
+  cacheForThisBrowser();
+  const today = todayISO();
+  const [, days] = await Promise.all([requireUser(), listHerdMilk(addDays(today, -29), today)]);
+  return { today, days };
+}
+
+/** One milking's entry sheet: every cow, what's already saved, and last time's litres as a hint. */
+export async function loadMilkEntry(date: string | null, session: Session | null) {
+  "use cache: private";
+  cacheForThisBrowser();
+  const today = todayISO();
+  const day = date && date <= today ? date : today;
+  const sess: Session = session ?? (currentHour() < 12 ? "morning" : "evening");
+  const [, cows, saved, last] = await Promise.all([
+    requireUser(),
+    listCows(day),
+    getMilkSession(day, sess),
+    getLastMilkBefore(day, sess),
+  ]);
+  return {
+    today,
+    date: day,
+    session: sess,
+    cows: cows.map((c) => ({
+      id: c.id,
+      tag: c.tag,
+      name: c.name,
+      groupName: c.groupName,
+      stage: c.stage,
+      onHold: !!c.milkSafeFrom,
+      saved: saved[c.id] ?? null,
+      last: last[c.id] ?? null,
+    })),
+  };
 }

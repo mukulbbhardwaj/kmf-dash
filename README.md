@@ -1,6 +1,6 @@
 # Milk Farm Tracker
 
-A mobile-first web app for tracking a dairy herd by ear-tag number: health checks, medicines (with milk withdrawal dates) and feed.
+A mobile-first web app for tracking a dairy herd by ear-tag number: milk yield, health checks, medicines (with milk withdrawal dates) and feed.
 
 Built with Next.js (App Router, server actions) and SQLite via libSQL: a local file in development, [Turso](https://turso.tech) when hosted. No separate backend server is needed.
 
@@ -48,6 +48,8 @@ npm start
 | Health check | Healthy / Watch / Sick, temperature, symptom chips, note |
 | Give medicine | One or many cows, dose, route, schedule, milk withdrawal → "milk safe from" date |
 | Log feed | Morning / evening, per group or per cow, prefilled from last time |
+| Log milk | One sheet per milking: litres for every milking cow, last yield as a hint, "don't sell" flag for cows on withdrawal |
+| Milk | Herd totals per day, sellable vs on hold, 14-day chart; each cow also has a Milk tab |
 
 ## Deploy to Vercel (free) for testing
 

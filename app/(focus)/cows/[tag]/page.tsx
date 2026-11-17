@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { DeleteRecordButton } from "@/components/DeleteButton";
 import { PlusIcon } from "@/components/icons";
+import { MilkChart } from "@/components/MilkChart";
 import { CONDITION_LABEL, Empty, Loading, MilkHoldBanner, PageHeader, TagBadge } from "@/components/ui";
 import { type Condition, isActiveTreatment, isMilkHold, treatmentDay } from "@/lib/data";
-import { ageLabel, fmtDay, fmtRelative } from "@/lib/dates";
+import { addDays, ageLabel, fmtDay, fmtRelative } from "@/lib/dates";
 import { loadCow } from "@/lib/loaders";
 
 export async function generateMetadata({ params }: PageProps<"/cows/[tag]">) {
@@ -23,6 +24,7 @@ export default function CowPage(props: PageProps<"/cows/[tag]">) {
 
 const TABS = [
   { key: "health", label: "Health" },
+  { key: "milk", label: "Milk" },
   { key: "medicine", label: "Medicine" },
   { key: "feed", label: "Feed" },
 ] as const;
@@ -36,7 +38,7 @@ async function CowProfile({ params, searchParams }: PageProps<"/cows/[tag]">) {
 
   const { today, profile } = await loadCow(decodeURIComponent(rawTag), tab);
   if (!profile) notFound();
-  const { cow, health, treatments, feeds } = profile;
+  const { cow, health, treatments, feeds, milk } = profile;
   const summary = cow;
   const base = `/cows/${encodeURIComponent(cow.tag)}`;
   const q = `?tag=${encodeURIComponent(cow.tag)}`;
@@ -76,7 +78,7 @@ async function CowProfile({ params, searchParams }: PageProps<"/cows/[tag]">) {
 
         {cow.notes && <p className="rounded-2xl bg-chip px-3.5 py-3 text-sm text-subtle">{cow.notes}</p>}
 
-        <nav aria-label="Records" className="grid grid-cols-3 gap-1 rounded-xl bg-track p-1">
+        <nav aria-label="Records" className="grid grid-cols-4 gap-1 rounded-xl bg-track p-1">
           {TABS.map((t) => (
             <Link
               key={t.key}
@@ -105,6 +107,8 @@ async function CowProfile({ params, searchParams }: PageProps<"/cows/[tag]">) {
             ))}
           </Timeline>
         )}
+
+        {tab === "milk" && <MilkTab milk={milk} today={today} onHold={!!summary.milkSafeFrom} />}
 
         {tab === "medicine" && (
           <Timeline empty="No medicine given yet.">
@@ -150,18 +154,21 @@ async function CowProfile({ params, searchParams }: PageProps<"/cows/[tag]">) {
         )}
       </div>
 
-      <div className="fixed bottom-0 left-1/2 z-10 grid w-full max-w-md -translate-x-1/2 grid-cols-3 gap-2 border-t border-line bg-surface px-5 pt-3 pb-[max(env(safe-area-inset-bottom),20px)]">
-        <Link href={`/health/new${q}`} className="flex h-13 items-center justify-center gap-1.5 rounded-2xl bg-brand text-sm font-bold text-white">
-          <PlusIcon size={16} /> Health
+      <div className="fixed bottom-0 left-1/2 z-10 grid w-full max-w-md -translate-x-1/2 grid-cols-4 gap-1.5 border-t border-line bg-surface px-4 pt-3 pb-[max(env(safe-area-inset-bottom),20px)]">
+        <Link href={`/health/new${q}`} className="flex h-13 items-center justify-center gap-1 rounded-2xl bg-brand text-[13px] font-bold text-white">
+          <PlusIcon size={14} /> Health
         </Link>
-        <Link href={`/medicine/new${q}`} className="flex h-13 items-center justify-center gap-1.5 rounded-2xl bg-brand-soft text-sm font-bold text-brand-ink">
-          <PlusIcon size={16} /> Medicine
+        <Link href="/milk/new" className="flex h-13 items-center justify-center gap-1 rounded-2xl bg-brand-soft text-[13px] font-bold text-brand-ink">
+          <PlusIcon size={14} /> Milk
+        </Link>
+        <Link href={`/medicine/new${q}`} className="flex h-13 items-center justify-center gap-1 rounded-2xl bg-brand-soft text-[13px] font-bold text-brand-ink">
+          <PlusIcon size={14} /> Medicine
         </Link>
         <Link
           href={`/feed/new?target=${encodeURIComponent(`cow:${cow.id}`)}`}
-          className="flex h-13 items-center justify-center gap-1.5 rounded-2xl bg-brand-soft text-sm font-bold text-brand-ink"
+          className="flex h-13 items-center justify-center gap-1 rounded-2xl bg-brand-soft text-[13px] font-bold text-brand-ink"
         >
-          <PlusIcon size={16} /> Feed
+          <PlusIcon size={14} /> Feed
         </Link>
       </div>
     </div>
@@ -200,5 +207,48 @@ function TimelineItem({ color, title, when, detail, del }: { color: string; titl
         {detail && <span className="text-[13px] leading-snug text-subtle">{detail}</span>}
       </div>
     </li>
+  );
+}
+
+function MilkTab({ milk, today, onHold }: { milk: { date: string; morning: number | null; evening: number | null; total: number }[]; today: string; onHold: boolean }) {
+  if (milk.length === 0) return <Empty>No milk logged for this cow in the last 30 days.</Empty>;
+  const fmt = (n: number) => String(Math.round(n * 10) / 10);
+  const avg = (from: number, to: number) => {
+    const days = milk.filter((d) => d.date > addDays(today, -from) && d.date <= addDays(today, -to));
+    return days.length ? days.reduce((s, d) => s + d.total, 0) / days.length : null;
+  };
+  // Complete days only: today may still be missing the evening milking.
+  const thisWeek = avg(8, 1);
+  const lastWeek = avg(15, 8);
+  const change = thisWeek != null && lastWeek ? ((thisWeek - lastWeek) / lastWeek) * 100 : null;
+  const best = Math.max(...milk.map((d) => d.total));
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-3 gap-2">
+        <Stat label="7-day avg" value={thisWeek != null ? `${fmt(thisWeek)} L` : "–"} />
+        <Stat
+          label="vs week before"
+          value={change != null ? `${change >= 0 ? "▲" : "▼"} ${Math.abs(Math.round(change))}%` : "–"}
+          tone={change != null && change <= -10 ? "text-bad" : ""}
+        />
+        <Stat label="Best day" value={`${fmt(best)} L`} />
+      </div>
+      {onHold && <p className="text-xs text-warn">Milk from this cow is on hold. Log it, but don&apos;t sell it.</p>}
+      <div className="rounded-2xl border border-line bg-surface p-4">
+        <MilkChart days={milk} today={today} label="This cow's milk per day, last 14 days" />
+      </div>
+      <div className="flex flex-col rounded-2xl border border-line bg-surface">
+        {[...milk].reverse().slice(0, 10).map((d) => (
+          <div key={d.date} className="flex items-center justify-between border-b border-divider px-3.5 py-2.5 text-sm last:border-0">
+            <span className="font-semibold">{fmtRelative(d.date, today)}</span>
+            <span className="text-xs text-muted">
+              M {d.morning != null ? fmt(d.morning) : "–"} · E {d.evening != null ? fmt(d.evening) : "–"}
+            </span>
+            <span className="w-16 text-right font-bold tabular-nums">{fmt(d.total)} L</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

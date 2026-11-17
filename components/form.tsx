@@ -259,10 +259,11 @@ export function CowPicker({
 
 // ---------- Submit ----------
 
-export function SaveBar({ label, error }: { label: string; error?: string }) {
+export function SaveBar({ label, error, children }: { label: string; error?: string; children?: ReactNode }) {
   const { pending } = useFormStatus();
   return (
     <div className="sticky bottom-0 z-10 mt-auto flex flex-col gap-2 bg-ground px-5 pt-3 pb-[max(env(safe-area-inset-bottom),20px)]">
+      {children}
       {error && (
         <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-semibold text-bad">
           {error}

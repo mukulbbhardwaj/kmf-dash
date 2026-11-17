@@ -18,7 +18,7 @@ function client() {
 }
 
 // Bump when lib/schema.sql or migrate() changes, so existing databases get upgraded.
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 /** The connection, with the schema checked once per server instance. */
 export async function db() {

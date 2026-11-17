@@ -76,3 +76,14 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+
+CREATE TABLE IF NOT EXISTS milk_yields (
+  id          INTEGER PRIMARY KEY,
+  cow_id      INTEGER NOT NULL REFERENCES cows(id) ON DELETE CASCADE,
+  date        TEXT NOT NULL,
+  session     TEXT NOT NULL,
+  litres      REAL NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS milk_yields_cow_day ON milk_yields(cow_id, date, session);
+CREATE INDEX IF NOT EXISTS milk_yields_date ON milk_yields(date, session);

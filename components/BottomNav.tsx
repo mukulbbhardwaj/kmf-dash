@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { FeedIcon, HeartIcon, HomeIcon, ListIcon, PillIcon, PlusIcon } from "./icons";
+import { DropIcon, FeedIcon, HeartIcon, HomeIcon, ListIcon, PillIcon, PlusIcon } from "./icons";
 
 const TABS = [
   { href: "/", label: "Home", Icon: HomeIcon },
@@ -14,6 +14,7 @@ const TABS = [
 ] as const;
 
 const ADD = [
+  { href: "/milk/new", label: "Log milk", Icon: DropIcon },
   { href: "/health/new", label: "Health check", Icon: HeartIcon },
   { href: "/medicine/new", label: "Give medicine", Icon: PillIcon },
   { href: "/feed/new", label: "Log feed", Icon: FeedIcon },

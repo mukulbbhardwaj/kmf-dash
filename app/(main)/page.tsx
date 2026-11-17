@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { FeedIcon, HeartIcon, PillIcon, PlusIcon, ChevronRightIcon, UserIcon } from "@/components/icons";
+import { DropIcon, FeedIcon, HeartIcon, PillIcon, PlusIcon, ChevronRightIcon, UserIcon } from "@/components/icons";
 import { QuickFind } from "@/components/QuickFind";
 import { Card, Empty, Loading, SectionTitle } from "@/components/ui";
 import { isActiveTreatment, treatmentDay } from "@/lib/data";
@@ -18,12 +18,25 @@ export default function HomePage() {
 type Task = { key: string; href: string; badge: string; tone: string; title: string; detail: string };
 
 async function Home() {
-  const { user, today, hour, cows, treatments, fedToday, groups } = await loadHome();
+  const { user, today, hour, cows, treatments, fedToday, groups, milkToday, milkYesterday } = await loadHome();
+  const milking = cows.filter((c) => c.stage === "milking").length;
 
   const sick = cows.filter((c) => c.condition === "sick").length;
   const onHold = cows.filter((c) => c.milkSafeFrom).length;
 
   const tasks: Task[] = [
+    ...(milking > 0
+      ? (hour < 17 ? (["morning"] as const) : (["morning", "evening"] as const))
+          .filter((s) => (s === "morning" ? milkToday?.morning : milkToday?.evening) == null)
+          .map((s) => ({
+            key: `m${s}`,
+            href: `/milk/new?session=${s}`,
+            badge: "Milk",
+            tone: "bg-info-soft text-info",
+            title: `${s === "morning" ? "Morning" : "Evening"} milk`,
+            detail: `${milking} milking cows · not logged yet`,
+          }))
+      : []),
     ...treatments
       .filter((t) => isActiveTreatment(t, today))
       .map((t) => ({
@@ -92,20 +105,43 @@ async function Home() {
         </Link>
       </div>
 
+      <Link href="/milk" prefetch={true} className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-info-soft text-info">
+          <DropIcon size={22} />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-xs text-muted">Milk today</span>
+          <span className="font-display text-xl font-extrabold">
+            {milkToday ? `${litres(milkToday.total)} L` : "Not logged"}
+            {milkToday && milkToday.held > 0 && <span className="ml-1.5 text-xs font-semibold text-warn">{litres(milkToday.held)} L on hold</span>}
+          </span>
+          <span className="truncate text-xs text-muted">
+            Morning {milkToday?.morning != null ? `${litres(milkToday.morning)} L` : "–"} · Evening{" "}
+            {milkToday?.evening != null ? `${litres(milkToday.evening)} L` : "–"}
+            {milkYesterday && ` · Yesterday ${litres(milkYesterday.total)} L`}
+          </span>
+        </span>
+        <ChevronRightIcon size={18} className="text-muted" />
+      </Link>
+
       <section className="flex flex-col gap-2.5">
         <SectionTitle>Quick add</SectionTitle>
-        <div className="grid grid-cols-3 gap-2.5">
-          <Link href="/health/new" prefetch={true} className="flex h-23 flex-col justify-between rounded-2xl bg-brand p-3.5 text-white">
-            <HeartIcon size={24} />
-            <span className="text-sm font-semibold">Health</span>
+        <div className="grid grid-cols-4 gap-2">
+          <Link href="/milk/new" prefetch={true} className="flex h-21 flex-col justify-between rounded-2xl bg-brand p-3 text-white">
+            <DropIcon size={22} />
+            <span className="text-[13px] font-semibold">Milk</span>
           </Link>
-          <Link href="/medicine/new" prefetch={true} className="flex h-23 flex-col justify-between rounded-2xl border border-line bg-surface p-3.5">
-            <PillIcon size={24} className="text-brand" />
-            <span className="text-sm font-semibold">Medicine</span>
+          <Link href="/health/new" prefetch={true} className="flex h-21 flex-col justify-between rounded-2xl border border-line bg-surface p-3">
+            <HeartIcon size={22} className="text-brand" />
+            <span className="text-[13px] font-semibold">Health</span>
           </Link>
-          <Link href="/feed/new" prefetch={true} className="flex h-23 flex-col justify-between rounded-2xl border border-line bg-surface p-3.5">
-            <FeedIcon size={24} className="text-brand" />
-            <span className="text-sm font-semibold">Feed</span>
+          <Link href="/medicine/new" prefetch={true} className="flex h-21 flex-col justify-between rounded-2xl border border-line bg-surface p-3">
+            <PillIcon size={22} className="text-brand" />
+            <span className="text-[13px] font-semibold">Medicine</span>
+          </Link>
+          <Link href="/feed/new" prefetch={true} className="flex h-21 flex-col justify-between rounded-2xl border border-line bg-surface p-3">
+            <FeedIcon size={22} className="text-brand" />
+            <span className="text-[13px] font-semibold">Feed</span>
           </Link>
         </div>
       </section>
@@ -138,4 +174,8 @@ async function Home() {
       </section>
     </div>
   );
+}
+
+function litres(n: number) {
+  return String(Math.round(n * 10) / 10);
 }

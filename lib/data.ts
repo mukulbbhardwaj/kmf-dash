@@ -185,11 +185,12 @@ export type CowProfile = {
   health: HealthCheck[];
   treatments: Treatment[];
   feeds: FeedLog[];
+  milk: MilkDay[];
 };
 
 /** Everything the cow page needs, fetched in one parallel round trip keyed by tag. */
-export async function getCowProfile(tag: string, today: string, withFeed: boolean): Promise<CowProfile | null> {
-  const [cowRow, healthRows, treatmentRows, feedRows] = await Promise.all([
+export async function getCowProfile(tag: string, today: string, tab: string): Promise<CowProfile | null> {
+  const [cowRow, healthRows, treatmentRows, feedRows, milkRows] = await Promise.all([
     get("SELECT * FROM cows WHERE tag = ? COLLATE NOCASE", [tag]),
     all(
       `SELECT h.* FROM health_checks h JOIN cows c ON c.id = h.cow_id
@@ -201,13 +202,20 @@ export async function getCowProfile(tag: string, today: string, withFeed: boolea
        WHERE c.tag = ? COLLATE NOCASE ORDER BY t.start_date DESC, t.id DESC LIMIT 50`,
       [tag],
     ),
-    withFeed
+    tab === "feed"
       ? all(
           `SELECT f.*, fc.tag AS cow_tag FROM cows c
            JOIN feed_logs f ON f.cow_id = c.id OR (f.group_name IS NOT NULL AND f.group_name = c.group_name COLLATE NOCASE)
            LEFT JOIN cows fc ON fc.id = f.cow_id
            WHERE c.tag = ? COLLATE NOCASE ORDER BY f.date DESC, f.session DESC, f.id DESC LIMIT 30`,
           [tag],
+        )
+      : Promise.resolve([]),
+    tab === "milk"
+      ? all(
+          `SELECT m.date, m.session, m.litres FROM milk_yields m JOIN cows c ON c.id = m.cow_id
+           WHERE c.tag = ? COLLATE NOCASE AND m.date >= ? ORDER BY m.date`,
+          [tag, addDays(today, -29)],
         )
       : Promise.resolve([]),
   ]);
@@ -230,6 +238,7 @@ export async function getCowProfile(tag: string, today: string, withFeed: boolea
     health,
     treatments,
     feeds: feedRows.map(toFeed),
+    milk: toMilkDays(milkRows),
   };
 }
 
@@ -284,6 +293,7 @@ export async function deleteCow(id: number) {
     { sql: "DELETE FROM health_checks WHERE cow_id = ?", args: [id] },
     { sql: "DELETE FROM treatments WHERE cow_id = ?", args: [id] },
     { sql: "DELETE FROM feed_logs WHERE cow_id = ?", args: [id] },
+    { sql: "DELETE FROM milk_yields WHERE cow_id = ?", args: [id] },
     { sql: "DELETE FROM cows WHERE id = ?", args: [id] },
   ]);
 }
@@ -402,4 +412,85 @@ export async function insertFeedLog(f: Omit<FeedLog, "id" | "cowTag">) {
 
 export async function deleteFeedLog(id: number) {
   await run("DELETE FROM feed_logs WHERE id = ?", [id]);
+}
+
+// ---------- Milk ----------
+
+export type MilkDay = { date: string; morning: number | null; evening: number | null; total: number };
+
+function toMilkDays(rows: Row[]): MilkDay[] {
+  const byDate = new Map<string, MilkDay>();
+  for (const r of rows) {
+    const date = String(r.date);
+    const day = byDate.get(date) ?? { date, morning: null, evening: null, total: 0 };
+    const litres = Number(r.litres);
+    if (r.session === "morning") day.morning = (day.morning ?? 0) + litres;
+    else day.evening = (day.evening ?? 0) + litres;
+    day.total += litres;
+    byDate.set(date, day);
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Litres per cow for one milking. */
+export async function getMilkSession(date: string, session: Session): Promise<Record<number, number>> {
+  const rows = await all("SELECT cow_id, litres FROM milk_yields WHERE date = ? AND session = ?", [date, session]);
+  return Object.fromEntries(rows.map((r) => [Number(r.cow_id), Number(r.litres)]));
+}
+
+/** Each cow's most recent yield for this session before `date`, shown as a hint while entering. */
+export async function getLastMilkBefore(date: string, session: Session): Promise<Record<number, number>> {
+  const rows = await all(
+    `SELECT cow_id, litres FROM (
+       SELECT cow_id, litres, ROW_NUMBER() OVER (PARTITION BY cow_id ORDER BY date DESC) rn
+       FROM milk_yields WHERE session = ? AND date < ? AND date >= ?)
+     WHERE rn = 1`,
+    [session, date, addDays(date, -14)],
+  );
+  return Object.fromEntries(rows.map((r) => [Number(r.cow_id), Number(r.litres)]));
+}
+
+/** Herd milk per day, split into what can be sold and what is on medicine hold. */
+export type HerdMilkDay = MilkDay & { held: number; cows: number };
+
+export async function listHerdMilk(fromDate: string, toDate: string): Promise<HerdMilkDay[]> {
+  const [rows, treatmentRows] = await Promise.all([
+    all("SELECT cow_id, date, session, litres FROM milk_yields WHERE date BETWEEN ? AND ?", [fromDate, toDate]),
+    all("SELECT * FROM treatments WHERE withdrawal_days > 0 AND start_date <= ? AND start_date >= ?", [toDate, addDays(fromDate, -400)]),
+  ]);
+  const treatments = treatmentRows.map(toTreatment);
+  const onHold = (cowId: number, date: string) => treatments.some((t) => t.cowId === cowId && isMilkHold(t, date));
+
+  const days = new Map<string, HerdMilkDay & { cowSet: Set<number> }>();
+  for (const r of rows) {
+    const date = String(r.date);
+    const cowId = Number(r.cow_id);
+    const litres = Number(r.litres);
+    const day = days.get(date) ?? { date, morning: null, evening: null, total: 0, held: 0, cows: 0, cowSet: new Set() };
+    if (r.session === "morning") day.morning = (day.morning ?? 0) + litres;
+    else day.evening = (day.evening ?? 0) + litres;
+    day.total += litres;
+    if (onHold(cowId, date)) day.held += litres;
+    day.cowSet.add(cowId);
+    days.set(date, day);
+  }
+  return [...days.values()]
+    .map(({ cowSet, ...d }) => ({ ...d, cows: cowSet.size }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Saves one milking: a number sets the cow's litres, null clears it. */
+export async function saveMilkSession(date: string, session: Session, entries: { cowId: number; litres: number | null }[]) {
+  if (entries.length === 0) return;
+  await batch(
+    entries.map((e) =>
+      e.litres == null
+        ? { sql: "DELETE FROM milk_yields WHERE cow_id = ? AND date = ? AND session = ?", args: [e.cowId, date, session] }
+        : {
+            sql: `INSERT INTO milk_yields (cow_id, date, session, litres) VALUES (?, ?, ?, ?)
+                  ON CONFLICT(cow_id, date, session) DO UPDATE SET litres = excluded.litres`,
+            args: [e.cowId, date, session, e.litres],
+          },
+    ),
+  );
 }

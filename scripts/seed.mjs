@@ -77,5 +77,18 @@ for (let d = -3; d <= 0; d++) {
   }
 }
 
+// Two weeks of milk for the milking cows, with a gentle day-to-day wobble.
+const milk = prepare("INSERT INTO milk_yields (cow_id, date, session, litres) VALUES (?, ?, ?, ?)");
+const baseLitres = { 1042: 7, 1017: 6.5, 1008: 6, 1023: 8, 1036: 6.5, 1051: 5.5, 1055: 6 };
+for (let d = -13; d <= 0; d++) {
+  for (const [tag, base] of Object.entries(baseLitres)) {
+    const sick = tag === "1042" && d >= -1; // Gauri's mastitis shows up in her yield
+    const wobble = ((Number(tag) * 7 + d * 13) % 9) / 10 - 0.4;
+    const litres = (s) => Math.max(1, Math.round((base + wobble + (s === "evening" ? -0.8 : 0)) * (sick ? 0.6 : 1) * 10) / 10);
+    milk.run(ids[tag], day(d), "morning", litres("morning"));
+    if (d < 0) milk.run(ids[tag], day(d), "evening", litres("evening"));
+  }
+}
+
 await db.batch(stmts, "write");
 console.log(`Seeded ${cows.length} cows into ${url.split("?")[0]}`);
