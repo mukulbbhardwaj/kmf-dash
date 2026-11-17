@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Milk Farm Tracker
 
-## Getting Started
+A mobile-first web app for tracking a dairy herd by ear-tag number: health checks, medicines (with milk withdrawal dates) and feed.
 
-First, run the development server:
+Built with Next.js (App Router, server actions) and SQLite via libSQL: a local file in development, [Turso](https://turso.tech) when hosted. No separate backend server is needed.
+
+## Run it
+
+Requires Node 22.13 or newer.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:3000
+npm run seed         # optional: add a demo herd of 8 cows to an empty database
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The first visit opens **/setup** to create the owner (admin) account. Add farm workers later in **Settings**.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Open the address on a phone on the same Wi-Fi (use the computer's IP, e.g. `http://192.168.1.20:3000`) and use "Add to Home Screen" to install it like an app.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+For daily use, run the production build:
 
-## Learn More
+```bash
+npm run build
+npm start
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Data
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Locally everything is stored in `data/farm.db`. Set `FARM_DB_PATH` to keep it elsewhere.
+- When `TURSO_DATABASE_URL` (and `TURSO_AUTH_TOKEN`) are set, the app uses that Turso database instead.
+- The schema is in `lib/schema.sql` and is applied automatically on start.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Login
 
-## Deploy on Vercel
+- Username and password. Passwords are hashed with scrypt; sessions are random tokens stored hashed in the database, in an httpOnly cookie for 30 days.
+- **Admin:** everything, plus adding and removing people, resetting their passwords and deleting cows.
+- **Worker:** view the herd and add, edit and delete health, medicine and feed records.
+- In production, `/setup` requires the `SETUP_CODE` environment variable, so a stranger can't claim a fresh deployment.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Screens
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Screen | What it does |
+| --- | --- |
+| Home | Find a cow by tag, herd counts, quick add, today's tasks (doses due, sick cows, feeds not logged) |
+| Herd | Search and filter all cows |
+| Cow profile | Status, milk-hold warning, health / medicine / feed history |
+| Health check | Healthy / Watch / Sick, temperature, symptom chips, note |
+| Give medicine | One or many cows, dose, route, schedule, milk withdrawal → "milk safe from" date |
+| Log feed | Morning / evening, per group or per cow, prefilled from last time |
+
+## Deploy to Vercel (free) for testing
+
+1. **Create a Turso database** (free tier) and get its URL and token. Use either:
+   - Vercel dashboard → your project → **Storage** → Turso (Marketplace). It creates the database and adds the env vars for you. Check they're named `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+   - Or [turso.tech](https://turso.tech): create a database, copy its `libsql://…` URL and create a token.
+2. **Deploy from this folder:**
+   ```bash
+   vercel login
+   vercel            # first run creates the project and a preview deployment
+   ```
+3. **Set environment variables** (Vercel → Project → Settings → Environment Variables, or `vercel env add NAME`):
+   `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and `SETUP_CODE` (any secret phrase).
+4. **Deploy to production:** `vercel --prod`
+5. Open the production URL. It goes to **/setup**: enter the setup code and create your admin account.
+
+Optional: load the demo herd into Turso from your computer:
+
+```bash
+TURSO_DATABASE_URL=libsql://… TURSO_AUTH_TOKEN=… npm run seed
+```
+
+## Hosting notes
+
+- On a farm PC, Raspberry Pi or VPS you don't need Turso: `npm run build && npm start` uses the local `data/farm.db`. Back that file up regularly.
+- There is no limit on wrong password attempts yet. Use strong passwords.
