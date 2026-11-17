@@ -18,7 +18,7 @@ function client() {
 }
 
 // Bump when lib/schema.sql or migrate() changes, so existing databases get upgraded.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /** The connection, with the schema checked once per server instance. */
 export async function db() {
@@ -32,13 +32,25 @@ export async function db() {
 }
 
 // One cheap query when the database is current; the full schema only when it isn't.
+// The version lives in a table because Turso doesn't persist PRAGMA user_version.
 async function ensureSchema(c: Client) {
   if (URL.startsWith("file:")) await c.execute("PRAGMA journal_mode = WAL");
-  const version = Number((await c.execute("PRAGMA user_version")).rows[0]?.user_version ?? 0);
-  if (version >= SCHEMA_VERSION) return;
+  if ((await storedSchemaVersion(c)) >= SCHEMA_VERSION) return;
   await c.executeMultiple(fs.readFileSync(SCHEMA_PATH, "utf8"));
   await migrate(c);
-  await c.execute(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+  await c.execute({
+    sql: "INSERT INTO app_meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    args: [String(SCHEMA_VERSION)],
+  });
+}
+
+async function storedSchemaVersion(c: Client) {
+  try {
+    const r = await c.execute("SELECT value FROM app_meta WHERE key = 'schema_version'");
+    return Number(r.rows[0]?.value ?? 0);
+  } catch {
+    return 0; // app_meta doesn't exist yet
+  }
 }
 
 // Small in-place upgrades for databases created by earlier versions.
