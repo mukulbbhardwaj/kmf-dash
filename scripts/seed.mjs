@@ -1,4 +1,4 @@
-// Adds a small demo herd. Run with: npm run seed
+// Adds a demo herd of 10 cows. Run with: npm run seed
 // Refuses to touch a database that already has cows.
 import fs from "node:fs";
 import path from "node:path";
@@ -36,6 +36,8 @@ const cows = [
   ["1051", "Bela", "Gir", "Group B", "milking", -5 * 365],
   ["1031", "Ganga", "HF cross", "Dry", "dry", -7 * 365],
   ["1049", "Radha", "Jersey", "Heifers", "heifer", -600],
+  ["1055", "Kapila", "Gir", "Group B", "milking", -6 * 365],
+  ["1060", "Chandni", "Jersey", "Heifers", "heifer", -500],
 ];
 const ids = {};
 for (const [tag, name, breed, group, stage, born] of cows) {
@@ -51,7 +53,7 @@ health.run(ids["1042"], day(-8), "07:30", "healthy", 38.6, "[]", "Routine check.
 health.run(ids["1042"], day(-1), "18:10", "watch", 39.1, JSON.stringify(["Less milk", "Not eating"]), null);
 health.run(ids["1042"], day(0), "07:10", "sick", 39.6, JSON.stringify(["Swollen udder", "Fever", "Less milk"]), "Vet called. Rear left quarter.");
 health.run(ids["1023"], day(-2), "08:00", "watch", 38.9, JSON.stringify(["Limping"]), "Front right hoof.");
-for (const tag of ["1017", "1008", "1036", "1051", "1031", "1049"]) health.run(ids[tag], day(-6), "07:45", "healthy", 38.5, "[]", null);
+for (const tag of ["1017", "1008", "1036", "1051", "1031", "1049", "1055", "1060"]) health.run(ids[tag], day(-6), "07:45", "healthy", 38.5, "[]", null);
 
 const med = prepare(
   "INSERT INTO treatments (cow_id, start_date, medicine, dose, unit, route, times_per_day, days, withdrawal_days, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -69,7 +71,7 @@ const ration = (n) =>
     { name: "Mineral mix", qty: Math.round(0.05 * n * 1000) / 1000, unit: "kg" },
   ]);
 for (let d = -3; d <= 0; d++) {
-  for (const [group, n] of [["Group A", 3], ["Group B", 3]]) {
+  for (const [group, n] of [["Group A", 3], ["Group B", 4]]) {
     feed.run(day(d), "morning", group, n, ration(n));
     if (d < 0) feed.run(day(d), "evening", group, n, ration(n));
   }
