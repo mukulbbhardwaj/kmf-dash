@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS feed_logs_date ON feed_logs(date);
 
 CREATE TABLE IF NOT EXISTS users (
   id            INTEGER PRIMARY KEY,
-  username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
   name          TEXT NOT NULL,
   role          TEXT NOT NULL DEFAULT 'worker',
   password_hash TEXT NOT NULL,

@@ -76,7 +76,7 @@ async function Home() {
         </div>
         <Link
           href="/settings"
-          aria-label={`Settings, signed in as ${user.name}`}
+          aria-label={`Settings, signed in as ${user.email}`}
           className="flex size-11 items-center justify-center rounded-full border border-line bg-surface"
         >
           <UserIcon size={22} />

@@ -4,31 +4,33 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   type Role,
+  bootstrapAdmin,
   checkCredentials,
   checkPassword,
-  countUsers,
   createUser,
   deleteUser,
+  emailTaken,
   endSession,
+  isEmail,
   passwordProblem,
   requireAdmin,
   requireUser,
   setPassword,
   startSession,
-  usernameTaken,
 } from "@/lib/auth";
 import type { FormState } from "./actions";
 
 const field = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
-const USERNAME_RE = /^[a-z0-9._-]{3,30}$/i;
 
 function safeNext(next: string) {
   return next.startsWith("/") && !next.startsWith("//") ? next : "/";
 }
 
 export async function login(_: FormState, fd: FormData): Promise<FormState> {
-  const user = await checkCredentials(field(fd, "username"), String(fd.get("password") ?? ""));
-  if (!user) return { error: "Wrong username or password." };
+  const email = field(fd, "email");
+  const password = String(fd.get("password") ?? "");
+  const user = (await checkCredentials(email, password)) ?? (await bootstrapAdmin(email, password));
+  if (!user) return { error: "Wrong email or password." };
   await startSession(user.id);
   redirect(safeNext(field(fd, "next")));
 }
@@ -38,35 +40,18 @@ export async function logout() {
   await endSession();
 }
 
-/** Creates the first (admin) account. Only works while there are no users. */
-export async function setup(_: FormState, fd: FormData): Promise<FormState> {
-  if ((await countUsers()) > 0) redirect("/login");
-
-  const required = process.env.SETUP_CODE;
-  if (process.env.NODE_ENV === "production" && !required) {
-    return { error: "Set the SETUP_CODE environment variable on the server first." };
-  }
-  if (required && field(fd, "setup_code") !== required) return { error: "Wrong setup code." };
-
-  const problem = validateNewUser(fd);
-  if (problem) return { error: problem };
-
-  await createUser({ username: field(fd, "username"), name: field(fd, "name"), role: "admin", password: String(fd.get("password")) });
-  const user = await checkCredentials(field(fd, "username"), String(fd.get("password")));
-  await startSession(user!.id);
-  redirect("/");
-}
-
 export async function addUser(_: FormState, fd: FormData): Promise<FormState> {
   await requireAdmin();
-  const problem = validateNewUser(fd);
+  const email = field(fd, "email");
+  if (!isEmail(email)) return { error: "Enter a valid email." };
+  const problem = passwordProblem(String(fd.get("password") ?? ""));
   if (problem) return { error: problem };
-  if (await usernameTaken(field(fd, "username"))) return { error: "That username is already taken." };
+  if (await emailTaken(email)) return { error: "That email already has an account." };
 
   const role: Role = field(fd, "role") === "admin" ? "admin" : "worker";
-  await createUser({ username: field(fd, "username"), name: field(fd, "name"), role, password: String(fd.get("password")) });
+  await createUser({ email, role, password: String(fd.get("password")) });
   revalidatePath("/settings");
-  return { ok: `Added ${field(fd, "name")}. Share the username and password with them.` };
+  return { ok: `Added ${email}. Share the password with them.` };
 }
 
 export async function removeUser(fd: FormData) {
@@ -94,10 +79,4 @@ export async function changeOwnPassword(_: FormState, fd: FormData): Promise<For
   await setPassword(user.id, password);
   await startSession(user.id);
   return { ok: "Password changed." };
-}
-
-function validateNewUser(fd: FormData) {
-  if (!field(fd, "name")) return "Enter a name.";
-  if (!USERNAME_RE.test(field(fd, "username"))) return "Username: 3–30 letters, numbers, dots or dashes.";
-  return passwordProblem(String(fd.get("password") ?? ""));
 }

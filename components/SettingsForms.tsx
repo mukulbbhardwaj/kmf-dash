@@ -42,11 +42,8 @@ export function AddUserForm() {
   const [role, setRole] = useState<"worker" | "admin">("worker");
   return (
     <form action={action} className="flex flex-col gap-3">
-      <Field label="Name" htmlFor="u-name">
-        <input id="u-name" name="name" required autoComplete="off" className={inputClass} />
-      </Field>
-      <Field label="Username" htmlFor="u-username">
-        <input id="u-username" name="username" required autoComplete="off" autoCapitalize="none" className={inputClass} />
+      <Field label="Email" htmlFor="u-email">
+        <input id="u-email" name="email" type="email" required autoComplete="off" autoCapitalize="none" className={inputClass} />
       </Field>
       <Field label="Password" hint="at least 8 characters" htmlFor="u-password">
         <input id="u-password" name="password" type="text" required minLength={8} autoComplete="off" className={inputClass} />
@@ -70,13 +67,13 @@ export function AddUserForm() {
   );
 }
 
-export function ResetPasswordForm({ userId, name }: { userId: number; name: string }) {
+export function ResetPasswordForm({ userId, email }: { userId: number; email: string }) {
   const [state, action] = useActionState<FormState, FormData>(resetUserPassword, {});
   return (
     <form action={action} className="flex flex-col gap-2 pt-2">
       <input type="hidden" name="id" value={userId} />
       <label className="sr-only" htmlFor={`reset-${userId}`}>
-        New password for {name}
+        New password for {email}
       </label>
       <div className="flex gap-2">
         <input id={`reset-${userId}`} name="password" type="text" required minLength={8} placeholder="New password" autoComplete="off" className={`${inputClass} h-12 flex-1`} />

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { LoginForm } from "@/components/AuthForms";
 import { Loading } from "@/components/ui";
-import { countUsers, getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -24,6 +24,5 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
 async function Login({ searchParams }: Pick<PageProps<"/login">, "searchParams">) {
   const { next } = await searchParams;
   if (await getCurrentUser()) redirect("/");
-  if ((await countUsers()) === 0) redirect("/setup");
   return <LoginForm next={typeof next === "string" ? next : "/"} />;
 }

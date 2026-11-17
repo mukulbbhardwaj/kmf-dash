@@ -12,10 +12,10 @@ export const SESSION_COOKIE = "farm_session";
 const SESSION_DAYS = 30;
 
 export type Role = "admin" | "worker";
-export type User = { id: number; username: string; name: string; role: Role };
+export type User = { id: number; email: string; role: Role };
 
 function toUser(r: Record<string, unknown>): User {
-  return { id: Number(r.id), username: String(r.username), name: String(r.name), role: r.role === "admin" ? "admin" : "worker" };
+  return { id: Number(r.id), email: String(r.email), role: r.role === "admin" ? "admin" : "worker" };
 }
 
 // ---------- Passwords ----------
@@ -39,7 +39,7 @@ export function passwordProblem(password: string) {
   return null;
 }
 
-// A real hash to compare against when the username doesn't exist, so timing doesn't reveal it.
+// A real hash to compare against when the email doesn't exist, so timing doesn't reveal it.
 const dummyHash = hashPassword("not-a-real-password");
 
 // ---------- Users ----------
@@ -49,20 +49,29 @@ export async function countUsers() {
 }
 
 export async function listUsers(): Promise<User[]> {
-  return (await all("SELECT id, username, name, role FROM users ORDER BY role, name COLLATE NOCASE")).map(toUser);
+  return (await all("SELECT id, email, role FROM users ORDER BY role, email COLLATE NOCASE")).map(toUser);
 }
 
-export async function createUser(u: { username: string; name: string; role: Role; password: string }) {
-  await run("INSERT INTO users (username, name, role, password_hash) VALUES (?, ?, ?, ?)", [
-    u.username,
-    u.name,
+export function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+export function isEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+export async function createUser(u: { email: string; role: Role; password: string }) {
+  const email = normalizeEmail(u.email);
+  await run("INSERT INTO users (email, name, role, password_hash) VALUES (?, ?, ?, ?)", [
+    email,
+    email.split("@")[0],
     u.role,
     await hashPassword(u.password),
   ]);
 }
 
-export async function usernameTaken(username: string) {
-  return !!(await get("SELECT 1 FROM users WHERE username = ? COLLATE NOCASE", [username]));
+export async function emailTaken(email: string) {
+  return !!(await get("SELECT 1 FROM users WHERE email = ? COLLATE NOCASE", [normalizeEmail(email)]));
 }
 
 export async function setPassword(userId: number, password: string) {
@@ -75,8 +84,8 @@ export async function deleteUser(userId: number) {
   await run("DELETE FROM users WHERE id = ?", [userId]);
 }
 
-export async function checkCredentials(username: string, password: string): Promise<User | null> {
-  const r = await get("SELECT * FROM users WHERE username = ? COLLATE NOCASE", [username]);
+export async function checkCredentials(email: string, password: string): Promise<User | null> {
+  const r = await get("SELECT * FROM users WHERE email = ? COLLATE NOCASE", [normalizeEmail(email)]);
   if (!r) {
     await verifyPassword(password, await dummyHash);
     return null;
@@ -87,6 +96,22 @@ export async function checkCredentials(username: string, password: string): Prom
 export async function checkPassword(userId: number, password: string) {
   const r = await get("SELECT password_hash FROM users WHERE id = ?", [userId]);
   return !!r && verifyPassword(password, String(r.password_hash));
+}
+
+/**
+ * The first admin comes from the ADMIN_EMAIL / ADMIN_PASSWORD environment variables:
+ * while no accounts exist, signing in with exactly those creates the admin account.
+ * After that the variables are ignored; change the password in Settings.
+ */
+export async function bootstrapAdmin(email: string, password: string): Promise<User | null> {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword || (await countUsers()) > 0) return null;
+  const a = Buffer.from(`${normalizeEmail(email)}\n${password}`);
+  const b = Buffer.from(`${normalizeEmail(adminEmail)}\n${adminPassword}`);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  await createUser({ email: adminEmail, role: "admin", password: adminPassword });
+  return checkCredentials(adminEmail, adminPassword);
 }
 
 // ---------- Sessions ----------
@@ -120,7 +145,7 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const r = await get(
-    `SELECT u.id, u.username, u.name, u.role FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.email, u.role FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ?`,
     [hashToken(token), new Date().toISOString()],
   );

@@ -14,7 +14,7 @@ npm run dev          # http://localhost:3000
 npm run seed         # optional: add a demo herd of 8 cows to an empty database
 ```
 
-The first visit opens **/setup** to create the owner (admin) account. Add farm workers later in **Settings**.
+Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` (e.g. in `.env.local`). Signing in with them the first time creates the admin account. Add farm workers later in **Settings**.
 
 Open the address on a phone on the same Wi-Fi (use the computer's IP, e.g. `http://192.168.1.20:3000`) and use "Add to Home Screen" to install it like an app.
 
@@ -33,10 +33,10 @@ npm start
 
 ## Login
 
-- Username and password. Passwords are hashed with scrypt; sessions are random tokens stored hashed in the database, in an httpOnly cookie for 30 days.
+- Email and password. Passwords are hashed with scrypt; sessions are random tokens stored hashed in the database, in an httpOnly cookie for 30 days.
+- The first admin comes from `ADMIN_EMAIL` / `ADMIN_PASSWORD`: while there are no accounts, signing in with exactly those creates it. After that the variables are ignored, so change the password in **Settings**.
 - **Admin:** everything, plus adding and removing people, resetting their passwords and deleting cows.
 - **Worker:** view the herd and add, edit and delete health, medicine and feed records.
-- In production, `/setup` requires the `SETUP_CODE` environment variable, so a stranger can't claim a fresh deployment.
 
 ## Screens
 
@@ -60,9 +60,9 @@ npm start
    vercel            # first run creates the project and a preview deployment
    ```
 3. **Set environment variables** (Vercel → Project → Settings → Environment Variables, or `vercel env add NAME`):
-   `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and `SETUP_CODE` (any secret phrase).
+   `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `ADMIN_EMAIL` and `ADMIN_PASSWORD`.
 4. **Deploy to production:** `vercel --prod`
-5. Open the production URL. It goes to **/setup**: enter the setup code and create your admin account.
+5. Open the production URL and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
 
 Optional: load the demo herd into Turso from your computer:
 

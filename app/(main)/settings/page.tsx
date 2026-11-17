@@ -27,10 +27,8 @@ async function Settings() {
     <>
       <Card className="flex items-center justify-between gap-3 p-4">
         <div className="flex min-w-0 flex-col">
-          <span className="truncate font-bold">{user.name}</span>
-          <span className="text-sm text-muted">
-            @{user.username} · {user.role === "admin" ? "Admin" : "Worker"}
-          </span>
+          <span className="truncate font-bold">{user.email}</span>
+          <span className="text-sm text-muted">{user.role === "admin" ? "Admin" : "Worker"}</span>
         </div>
         <SignOutButton />
       </Card>
@@ -44,19 +42,18 @@ async function Settings() {
                 <summary className="flex cursor-pointer list-none items-center gap-3">
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm font-semibold">
-                      {u.name} {u.id === user.id && <span className="font-normal text-muted">(you)</span>}
+                      {u.email} {u.id === user.id && <span className="font-normal text-muted">(you)</span>}
                     </span>
-                    <span className="text-xs text-muted">@{u.username}</span>
                   </span>
                   <Pill tone={u.role === "admin" ? "info" : "neutral"}>{u.role === "admin" ? "Admin" : "Worker"}</Pill>
                 </summary>
                 {u.id !== user.id && (
                   <div className="flex flex-col gap-2">
-                    <ResetPasswordForm userId={u.id} name={u.name} />
+                    <ResetPasswordForm userId={u.id} email={u.email} />
                     <form action={removeUser}>
                       <input type="hidden" name="id" value={u.id} />
                       <button type="submit" className="h-10 text-sm font-bold text-bad">
-                        Remove {u.name}
+                        Remove {u.email}
                       </button>
                     </form>
                   </div>

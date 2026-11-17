@@ -23,12 +23,19 @@ export async function db() {
   globalForDb.farmDbReady ??= (async () => {
     if (URL.startsWith("file:")) await c.execute("PRAGMA journal_mode = WAL");
     await c.executeMultiple(fs.readFileSync(SCHEMA_PATH, "utf8"));
+    await migrate(c);
   })().catch((err) => {
     globalForDb.farmDbReady = undefined;
     throw err;
   });
   await globalForDb.farmDbReady;
   return c;
+}
+
+// Small in-place upgrades for databases created by earlier versions.
+async function migrate(c: Client) {
+  const userCols = (await c.execute("PRAGMA table_info(users)")).rows.map((r) => String(r.name));
+  if (userCols.includes("username")) await c.execute("ALTER TABLE users RENAME COLUMN username TO email");
 }
 
 export async function all(sql: string, args: InArgs = []): Promise<Row[]> {
